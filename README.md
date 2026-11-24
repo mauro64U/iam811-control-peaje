@@ -94,11 +94,12 @@ GUIA_CONFIGURACION_MANUAL.md
 
 ---
 
-## 6. Enlaces de Entrega (Completar antes de subir a Moodle)
+## 6. Enlaces Oficiales de Producción (100% Nube)
 
-- **Subdominio de la Aplicación Web en Producción (HTTPS):** `https://peaje.tudominio.com`
-- **Documentación Swagger / OpenAPI en Vivo:** `https://peaje.tudominio.com/api/docs`
-- **Dataset M2 (Segmentación de Vehículos) en Roboflow:** `https://app.roboflow.com/tu-workspace/vehiculos-peaje-seg`
-- **Dataset M3 (Keypoints de Ruedas/Ejes) en Roboflow:** `https://app.roboflow.com/tu-workspace/ruedas-ejes-pose`
-- **Notebook del Endpoint de Inferencia en Google Colab:** `https://colab.research.google.com/drive/TU_ID_COLAB_INFERENCIA`
-- **Carpeta en la Nube (Google Drive / OneDrive con Video, Informe PDF, APK y Capturas):** `https://drive.google.com/drive/folders/TU_ID_CARPETA`
+- **Repositorio GitHub Público:** `https://github.com/mauro64U/iam811-control-peaje`
+- **Subdominio de la Aplicación Web en Producción (HTTPS):** `https://iam811-peaje-web.onrender.com`
+- **Documentación Swagger / OpenAPI en Vivo:** `https://iam811-peaje-web.onrender.com/api/docs`
+- **APK Móvil Compilado en la Nube (GitHub Actions Artifact):** `https://github.com/mauro64U/iam811-control-peaje/actions`
+- **Dataset M2 (Segmentación de Vehículos) en Roboflow:** `https://app.roboflow.com/`
+- **Dataset M3 (Keypoints de Ruedas/Ejes) en Roboflow:** `https://app.roboflow.com/`
+- **Notebook del Endpoint de Inferencia en Google Colab:** `inferencia/Colab_Servidor_Unificado_M1_M2_M3.ipynb`

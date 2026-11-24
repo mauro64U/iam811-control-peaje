@@ -7,7 +7,7 @@
   "variable": [
     {
       "key": "BASE_URL",
-      "value": "https://peaje.tudominio.com/api/v1"
+      "value": "https://iam811-peaje-web.onrender.com/api/v1"
     },
     {
       "key": "JWT_TOKEN",
