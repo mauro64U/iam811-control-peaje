@@ -1,0 +1,51 @@
+name: Build Android APK (Flutter)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "URL HTTPS del Backend (/api/v1)"
+        required: true
+        default: "https://iam811-peaje-web.onrender.com/api/v1"
+      google_web_client_id:
+        description: "Google Web Client ID para OAuth 2.0"
+        required: false
+        default: ""
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.0"
+          channel: "stable"
+
+      - name: Generate Android scaffold and build release APK
+        working-directory: ./movil
+        run: |
+          flutter create . --project-name iam811_peaje_movil --org com.iam811
+          flutter pub get
+          API_URL="${{ github.event.inputs.api_base_url || 'https://iam811-peaje-web.onrender.com/api/v1' }}"
+          CLIENT_ID="${{ github.event.inputs.google_web_client_id || vars.GOOGLE_CLIENT_ID }}"
+          flutter build apk --release \
+            --dart-define=API_BASE_URL="$API_URL" \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$CLIENT_ID"
+
+      - name: Upload Compiled APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iam811-peaje-movil-apk
+          path: movil/build/app/outputs/flutter-apk/app-release.apk

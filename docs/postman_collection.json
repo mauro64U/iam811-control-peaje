@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "IAM-811 Sistema Inteligente de Control de Peaje - API REST",
+    "description": "Colección oficial Postman / OpenAPI de la API REST del Sistema Inteligente de Control de Peaje. Todas las rutas (excepto /api/v1/auth/google) requieren Bearer Token de sesión tras autenticarse con Google OAuth 2.0.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "https://peaje.tudominio.com/api/v1"
+    },
+    {
+      "key": "JWT_TOKEN",
+      "value": "pegar_jwt_de_sesion_aqui"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. POST /api/v1/auth/google (Inicio de sesión con Google OAuth 2.0)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{BASE_URL}}/auth/google",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"GOOGLE_ID_TOKEN_O_ACCESS_TOKEN\"\n}"
+        }
+      }
+    },
+    {
+      "name": "2. POST /api/v1/pasos/frame (Registrar paso desde cámara -> Colab M1+M2+M3 -> SSE Tiempo Real)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": "{{BASE_URL}}/pasos/frame",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": "photo_1_2026-11-24_12-03-30.jpg" },
+            { "key": "caseta_id", "value": "1", "type": "text" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. POST /api/v1/placas/consultar (Consultar estado de placa por texto)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{BASE_URL}}/placas/consultar",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"placa\": \"3034-DUS\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. POST /api/v1/placas/consultar-imagen (Consultar estado de placa por imagen M1 + OCR)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": "{{BASE_URL}}/placas/consultar-imagen",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": "photo_3_2026-11-24_12-03-30.jpg" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. GET /api/v1/placas/{placa}/historial (Historial de pasos de una placa)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": "{{BASE_URL}}/placas/3034DUS/historial"
+      }
+    },
+    {
+      "name": "6. GET /api/v1/casetas/{id}/resumen (Conteo y recaudación del día por caseta)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": "{{BASE_URL}}/casetas/1/resumen"
+      }
+    },
+    {
+      "name": "7. POST /api/v1/agente/chat (Mensaje al Agente Conversacional por texto o imagen)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{BASE_URL}}/agente/chat",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mensaje\": \"¿Cuál es el estado de la placa 3034-DUS?\"\n}"
+        }
+      }
+    },
+    {
+      "name": "8. GET /api/v1/estado/inferencia (Health-check del endpoint M1+M2+M3 en Google Colab)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" }
+        ],
+        "url": "{{BASE_URL}}/estado/inferencia"
+      }
+    },
+    {
+      "name": "9. PUT /api/v1/estado/inferencia (Actualizar INFERENCE_URL de Colab en caliente - Admin)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{JWT_TOKEN}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{BASE_URL}}/estado/inferencia",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inference_url\": \"https://tu-tunel-colab.trycloudflare.com\",\n  \"inference_api_token\": \"\"\n}"
+        }
+      }
+    }
+  ]
+}

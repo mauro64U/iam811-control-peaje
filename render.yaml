@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: iam811-peaje-web
+    runtime: docker
+    rootDir: web
+    plan: free
+    envVars:
+      - key: ADMIN_EMAILS
+        value: doc.alvaro.pinto.ma@unifranz.edu.bo,lpze.mauriciosebastian.vasquez.gu@unifranz.edu.bo
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: INFERENCE_URL
+        sync: false

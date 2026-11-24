@@ -1,0 +1,98 @@
+# =====================================================================
+# REGLAS ESTRICTAS DE SEGURIDAD - IAM-811 SISTEMA DE CONTROL DE PEAJE
+# Prohibido subir credenciales, tokens, API keys, secretos o pesos
+# =====================================================================
+
+# Variables de entorno y secretos
+.env
+*.env
+.env.*
+!.env.example
+!*/.env.example
+
+# Credenciales de Google Cloud / Firebase / OAuth 2.0
+google-services.json
+GoogleService-Info.plist
+client_secret*.json
+credentials*.json
+service-account*.json
+firebase-adminsdk*.json
+
+# Llaves y certificados Android / SSL / SSH
+*.jks
+*.keystore
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.der
+key.properties
+local.properties
+
+# Pesos de modelos de Deep Learning y datasets pesados
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.engine
+*.weights
+*.h5
+*.ckpt
+runs/
+datasets/
+dataset_*/
+preetiquetas/
+resultados/
+*.zip
+*.tar.gz
+
+# Python / Backend / Colab
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Node.js / Frontend Web
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+*.local
+
+# Flutter / Android / Mobile
+movil/.dart_tool/
+movil/.flutter-plugins
+movil/.flutter-plugins-dependencies
+movil/.packages
+movil/build/
+movil/android/.gradle/
+movil/android/captures/
+movil/android/local.properties
+movil/android/key.properties
+movil/android/app/debug/
+movil/android/app/profile/
+movil/android/app/release/
+*.apk
+*.aab
+*.ipa
+
+# IDEs y Sistema Operativo
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
