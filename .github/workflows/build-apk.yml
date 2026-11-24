@@ -12,7 +12,7 @@ on:
       google_web_client_id:
         description: "Google Web Client ID para OAuth 2.0"
         required: false
-        default: ""
+        default: "159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com"
 
 jobs:
   build-apk:

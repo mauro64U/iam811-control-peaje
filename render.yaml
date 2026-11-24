@@ -12,9 +12,9 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_CLIENT_ID
-        sync: false
+        value: 159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com
       - key: VITE_GOOGLE_CLIENT_ID
-        sync: false
+        value: 159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com
       - key: GEMINI_API_KEY
         sync: false
       - key: INFERENCE_URL

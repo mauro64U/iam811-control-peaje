@@ -24,12 +24,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const String kDefaultApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'https://peaje.tudominio.com/api/v1',
+  defaultValue: 'https://iam811-peaje-web.onrender.com/api/v1',
 );
 
 const String kGoogleServerClientId = String.fromEnvironment(
   'GOOGLE_WEB_CLIENT_ID',
-  defaultValue: '',
+  defaultValue: '159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com',
 );
 
 List<CameraDescription> _cameras = [];

@@ -6,6 +6,10 @@
 # Etapa 1: Compilar Frontend React + Vite + TailwindCSS
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
+ARG VITE_GOOGLE_CLIENT_ID=159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com
+ARG VITE_API_BASE_URL=/api/v1
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 COPY frontend/package.json ./
 RUN npm install
 COPY frontend/ ./
