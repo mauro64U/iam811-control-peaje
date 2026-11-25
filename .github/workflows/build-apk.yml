@@ -30,16 +30,20 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.0"
+          flutter-version: "3.27.1"
           channel: "stable"
 
       - name: Generate Android scaffold and build release APK
         working-directory: ./movil
         run: |
-          flutter create . --project-name iam811_peaje_movil --org com.iam811
+          cp lib/main.dart /tmp/main_backup.dart
+          cp pubspec.yaml /tmp/pubspec_backup.yaml
+          flutter create . --project-name iam811_peaje_movil --org com.iam811 --platforms=android
+          cp /tmp/pubspec_backup.yaml pubspec.yaml
+          cp /tmp/main_backup.dart lib/main.dart
           flutter pub get
           API_URL="${{ github.event.inputs.api_base_url || 'https://iam811-peaje-web.onrender.com/api/v1' }}"
-          CLIENT_ID="${{ github.event.inputs.google_web_client_id || vars.GOOGLE_CLIENT_ID }}"
+          CLIENT_ID="${{ github.event.inputs.google_web_client_id || '159830757831-du48o4vm4c7uigujttelj58dvlktbhpq.apps.googleusercontent.com' }}"
           flutter build apk --release \
             --dart-define=API_BASE_URL="$API_URL" \
             --dart-define=GOOGLE_WEB_CLIENT_ID="$CLIENT_ID"

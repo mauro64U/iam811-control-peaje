@@ -271,7 +271,7 @@ class _HomeControllerScreenState extends State<HomeControllerScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.cloud_Sync), onPressed: _configurarSubdominioDialog),
+          IconButton(icon: const Icon(Icons.cloud_sync), onPressed: _configurarSubdominioDialog),
           IconButton(icon: const Icon(Icons.logout), onPressed: _cerrarSesion),
         ],
       ),
