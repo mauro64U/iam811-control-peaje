@@ -17,9 +17,10 @@ Además de las rutas para las 6 páginas del Panel Web en Tiempo Real (Vehículo
 import os
 import time
 import uuid
+import base64
 import shutil
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import httpx
 from fastapi import FastAPI, Depends, File, UploadFile, Form, HTTPException, WebSocket, WebSocketDisconnect, Request
@@ -163,14 +164,21 @@ async def llamar_endpoint_inferencia_colab(db: Session, datos_imagen: bytes, nom
 
     latencia_total = round((time.perf_counter() - t0) * 1000, 1)
     placa_norm = normalizar_placa_estricta(data.get("placa") or data.get("placa_detalle", {}).get("texto", ""))
+    ahora_bo = datetime.now(timezone(timedelta(hours=-4))).strftime("%d/%m/%Y %H:%M:%S")
     return {
         "placa": placa_norm,
         "placa_leida": data.get("placa_leida") or placa_norm,
         "confianza": float(data.get("confianza", 0.0)),
+        "detectado": bool(placa_norm),
+        "fecha_hora_deteccion": data.get("fecha_hora_deteccion") or ahora_bo,
         "categoria": (data.get("categoria") or data.get("vehiculo", {}).get("categoria") or "auto").lower(),
+        "confianza_categoria": float(data.get("confianza_categoria") or data.get("vehiculo", {}).get("confianza") or 0.88),
         "ejes": int(data.get("ejes") or 2),
+        "ruedas_detectadas": int(data.get("ruedas_detectadas") or len(data.get("keypoints", []))),
         "keypoints": data.get("keypoints", []),
         "area_mascara": float(data.get("area_mascara") or data.get("vehiculo", {}).get("area_mascara") or 0.0),
+        "imagen_anotada_b64": data.get("imagen_anotada_b64") or "",
+        "placa_bbox": data.get("placa_detalle", {}).get("bbox", [0, 0, 0, 0]),
         "latencia_ms": float(data.get("latencia_ms") or latencia_total),
         "latencia_e2e_ms": latencia_total,
     }
@@ -179,11 +187,16 @@ async def llamar_endpoint_inferencia_colab(db: Session, datos_imagen: bytes, nom
 def serializar_paso(p: Paso, db: Session) -> dict:
     caseta = db.query(Caseta).filter(Caseta.id == p.caseta_id).first()
     veh = db.query(Vehiculo).filter(Vehiculo.placa == p.placa_normalizada).first()
+    dt_bo = p.created_at.astimezone(timezone(timedelta(hours=-4))) if p.created_at else datetime.now(timezone(timedelta(hours=-4)))
+    detectado_ok = bool(p.placa_normalizada and p.placa_normalizada != "ILEGIBLE")
     return {
         "id": p.id,
         "placa_leida": p.placa_leida,
         "placa_normalizada": p.placa_normalizada,
         "confianza_ocr": round(float(p.confianza_ocr), 3),
+        "detectado": detectado_ok,
+        "estado_deteccion": "DETECTADO" if detectado_ok else "NO DETECTADO",
+        "fecha_hora_registro": dt_bo.strftime("%d/%m/%Y %H:%M:%S"),
         "categoria_detectada": p.categoria_detectada,
         "ejes_detectados": p.ejes_detectados,
         "monto": round(float(p.monto), 2),
@@ -267,9 +280,9 @@ async def registrar_paso_frame(
     if not datos_img:
         raise HTTPException(status_code=400, detail="La imagen enviada está vacía.")
 
-    # Guardar imagen de evidencia
+    # Guardar imagen de evidencia original inicialmente
     ext = os.path.splitext(file.filename or "frame.jpg")[1] or ".jpg"
-    nombre_evidencia = f"paso_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
+    nombre_evidencia = f"paso_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
     ruta_evidencia = os.path.join(DIR_EVIDENCIAS, nombre_evidencia)
     with open(ruta_evidencia, "wb") as f:
         f.write(datos_img)
@@ -277,6 +290,15 @@ async def registrar_paso_frame(
 
     # Llamar al endpoint unificado de inferencia en Google Colab
     inf = await llamar_endpoint_inferencia_colab(db, datos_img, nombre_evidencia)
+
+    # Si Google Colab devolvió la imagen con las máscaras de colores (M1+M2+M3), sobrescribir la evidencia con la imagen pintada
+    if inf.get("imagen_anotada_b64"):
+        try:
+            bytes_anotados = base64.b64decode(inf["imagen_anotada_b64"])
+            with open(ruta_evidencia, "wb") as f:
+                f.write(bytes_anotados)
+        except Exception:
+            pass
 
     placa_norm = inf["placa"]
     placa_leida = inf["placa_leida"] or placa_norm or "ILEGIBLE"
@@ -472,8 +494,21 @@ async def chat_con_agente(
         datos_img = await file.read()
         if datos_img:
             resultado_inf = await llamar_endpoint_inferencia_colab(db, datos_img, file.filename or "chat_placa.jpg")
+            if resultado_inf.get("imagen_anotada_b64"):
+                nombre_chat_ev = f"chat_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}.jpg"
+                ruta_chat_ev = os.path.join(DIR_EVIDENCIAS, nombre_chat_ev)
+                try:
+                    with open(ruta_chat_ev, "wb") as f:
+                        f.write(base64.b64decode(resultado_inf["imagen_anotada_b64"]))
+                    resultado_inf["imagen_url"] = f"/evidencias/{nombre_chat_ev}"
+                except Exception:
+                    pass
 
-    return responder_chat_agente(db, texto_msg, resultado_inf)
+    res_agente = responder_chat_agente(db, texto_msg, resultado_inf)
+    if resultado_inf and resultado_inf.get("imagen_url"):
+        res_agente["imagen_url"] = resultado_inf["imagen_url"]
+        res_agente["fecha_hora_deteccion"] = resultado_inf.get("fecha_hora_deteccion", "")
+    return res_agente
 
 
 # ==================== 6. RUTAS DEL PANEL WEB (DASHBOARD, VEHÍCULOS CRUD, PASOS, ALERTAS, ESTADO) ====================

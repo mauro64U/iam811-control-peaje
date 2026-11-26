@@ -17,7 +17,10 @@ import {
   Send,
   ShieldAlert,
   Camera,
-  DollarSign,
+  ZoomIn,
+  X,
+  Clock,
+  Layers,
 } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/$/, "");
@@ -26,8 +29,25 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 function urlEvidencia(path) {
   if (!path) return "";
-  if (path.startsWith("http")) return path;
+  if (path.startsWith("http") || path.startsWith("data:")) return path;
   return `${ORIGIN_BASE}${path}`;
+}
+
+function formatearFechaHora(isoOrStr, fallbackStr) {
+  if (fallbackStr) return fallbackStr;
+  if (!isoOrStr) return "Sin fecha";
+  try {
+    return new Date(isoOrStr).toLocaleString("es-BO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return isoOrStr;
+  }
 }
 
 function BadgeEstado({ estado }) {
@@ -44,6 +64,18 @@ function BadgeEstado({ estado }) {
   );
 }
 
+function BadgeDeteccion({ detectado }) {
+  return detectado ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+      <CheckCircle2 className="w-3 h-3" /> DETECTADO
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
+      <XCircle className="w-3 h-3" /> NO DETECTADO
+    </span>
+  );
+}
+
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem("peaje_jwt") || "");
   const [usuario, setUsuario] = useState(() => {
@@ -56,6 +88,9 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState("tiempo_real");
   const [sseConectado, setSseConectado] = useState(false);
+
+  // Modal de Zoom de Imagen con Máscaras en Colores (M1 + M2 + M3)
+  const [modalImagen, setModalImagen] = useState(null);
 
   // Estado del Dashboard en Tiempo Real
   const [kpis, setKpis] = useState({
@@ -74,7 +109,7 @@ export default function App() {
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
 
-  // Estado para Prueba de Caseta desde Web (Subir Frame a /api/v1/pasos/frame)
+  // Estado para Prueba de Caseta desde Web
   const [casetaActiva, setCasetaActiva] = useState(1);
   const [subiendoFrame, setSubiendoFrame] = useState(false);
   const [ultimoResultadoCaseta, setUltimoResultadoCaseta] = useState(null);
@@ -95,7 +130,7 @@ export default function App() {
     {
       rol: "agente",
       texto:
-        "Hola, soy el Agente Conversacional de Control de Peaje (IAM-811). Escribe una placa (ej. 3034DUS, 2481KLM, 9988EVA o con error OCR como 3O34DUS) o sube la foto de un vehículo para consultar su estado entre los 4 estados oficiales.",
+        "Hola, soy el Agente Conversacional de Control de Peaje (IAM-811). Escribe una placa (ej. 3034DUS, 2481KLM, 9988EVA o con error OCR como 3O34DUS) o sube la foto de un vehículo para ver su imagen con máscaras de detección M1+M2+M3 y su estado oficial.",
       estado: "Listo",
     },
   ]);
@@ -117,7 +152,6 @@ export default function App() {
 
   const googleBtnRef = useRef(null);
 
-  // Helper de peticiones autenticadas
   async function apiFetch(endpoint, options = {}) {
     const headers = { ...(options.headers || {}) };
     if (token) {
@@ -146,7 +180,6 @@ export default function App() {
     setSseConectado(false);
   }
 
-  // Inicializar botón oficial de Google Sign-In (OAuth 2.0)
   useEffect(() => {
     if (token) return;
     const timer = setInterval(() => {
@@ -189,7 +222,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, [token]);
 
-  // Cargar datos iniciales y conectar stream SSE en tiempo real
   useEffect(() => {
     if (!token) return;
     cargarTodo();
@@ -330,7 +362,7 @@ export default function App() {
   async function enviarMensajeAgente(e) {
     e.preventDefault();
     if (!inputChat.trim() && !imagenChat) return;
-    const textoUsuario = inputChat.trim() || (imagenChat ? `[Imagen: ${imagenChat.name}]` : "");
+    const textoUsuario = inputChat.trim() || (imagenChat ? `[Imagen subida: ${imagenChat.name}]` : "");
     setMensajesChat((prev) => [...prev, { rol: "usuario", texto: textoUsuario }]);
     setInputChat("");
     setEnviandoChat(true);
@@ -339,6 +371,9 @@ export default function App() {
       if (inputChat.trim()) fd.append("mensaje", inputChat.trim());
       if (imagenChat) fd.append("file", imagenChat);
       const res = await apiFetch("/agente/chat", { method: "POST", body: fd });
+      const imgB64 = res.inferencia?.imagen_anotada_b64
+        ? `data:image/jpeg;base64,${res.inferencia.imagen_anotada_b64}`
+        : res.imagen_url || "";
       setMensajesChat((prev) => [
         ...prev,
         {
@@ -347,6 +382,9 @@ export default function App() {
           estado: res.estado,
           placa: res.placa_normalizada,
           sugerencias: res.sugerencias || [],
+          imagen_url: imgB64,
+          inferencia: res.inferencia || null,
+          fecha_hora: res.inferencia?.fecha_hora_deteccion || res.fecha_hora_deteccion || "",
         },
       ]);
     } catch (err) {
@@ -382,7 +420,33 @@ export default function App() {
     }
   }
 
-  // ==================== PANTALLA DE LOGIN CON GOOGLE OAUTH 2.0 ====================
+  function abrirModalZoom(pasoObj, inferenciaExtra = null) {
+    const src =
+      inferenciaExtra?.imagen_anotada_b64
+        ? `data:image/jpeg;base64,${inferenciaExtra.imagen_anotada_b64}`
+        : urlEvidencia(pasoObj.imagen_url);
+    const detOk =
+      pasoObj.detectado !== undefined
+        ? pasoObj.detectado
+        : Boolean(pasoObj.placa_normalizada && pasoObj.placa_normalizada !== "ILEGIBLE");
+    setModalImagen({
+      src,
+      placa: pasoObj.placa_normalizada || inferenciaExtra?.placa || "ILEGIBLE",
+      confianza_ocr: pasoObj.confianza_ocr ?? inferenciaExtra?.confianza ?? 0,
+      categoria: pasoObj.categoria_detectada || inferenciaExtra?.categoria || "auto",
+      area_mascara: inferenciaExtra?.area_mascara ?? null,
+      ejes: pasoObj.ejes_detectados || inferenciaExtra?.ejes || 2,
+      keypoints: inferenciaExtra?.keypoints || [],
+      monto: pasoObj.monto,
+      estado: pasoObj.estado || (detOk ? "DETECTADO" : "PLACA_ILEGIBLE"),
+      detectado: detOk,
+      caseta: pasoObj.caseta_nombre || "Caseta #1",
+      propietario: pasoObj.propietario || "Consulta Directa",
+      fecha_hora: formatearFechaHora(pasoObj.created_at, pasoObj.fecha_hora_registro || inferenciaExtra?.fecha_hora_deteccion),
+      latencia_ms: pasoObj.latencia_ms || inferenciaExtra?.latencia_ms || 0,
+    });
+  }
+
   if (!token || !usuario) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
@@ -432,7 +496,6 @@ export default function App() {
     );
   }
 
-  // ==================== PANEL WEB PRINCIPAL CON LAS 6 PÁGINAS OBLIGATORIAS ====================
   const navItems = [
     { id: "tiempo_real", label: "Panel en Tiempo Real", icon: Activity },
     { id: "vehiculos", label: "Vehículos (CRUD)", icon: Car },
@@ -444,6 +507,80 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      {/* ==================== MODAL DE ZOOM DE IMAGEN CON MÁSCARAS EN COLORES ==================== */}
+      {modalImagen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setModalImagen(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-2xl max-w-5xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <Layers className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-lg font-bold text-white">
+                    Inspección Visual de Máscaras e Inferencia (M1 + M2 + M3)
+                  </h3>
+                  <BadgeDeteccion detectado={modalImagen.detectado} />
+                  {modalImagen.estado && <BadgeEstado estado={modalImagen.estado} />}
+                </div>
+                <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  Fecha y Hora exacta de detección: <strong className="text-slate-200">{modalImagen.fecha_hora}</strong> ·{" "}
+                  {modalImagen.caseta} · Latencia GPU: <strong className="text-emerald-400">{modalImagen.latencia_ms} ms</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setModalImagen(null)}
+                className="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Imagen Ampliada con Máscaras de Colores */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex items-center justify-center">
+              <img
+                src={modalImagen.src}
+                alt={modalImagen.placa}
+                className="max-h-[60vh] w-auto object-contain"
+              />
+            </div>
+
+            {/* Leyenda de Colores de los 3 Modelos de IA */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-3.5">
+                <p className="font-bold text-emerald-300 uppercase">M1 · Detección de Placa + EasyOCR</p>
+                <p className="text-white text-base font-mono font-bold mt-1">{modalImagen.placa}</p>
+                <p className="text-slate-300 mt-0.5">
+                  Confianza OCR: <strong>{(modalImagen.confianza_ocr * 100).toFixed(1)}%</strong> · Recuadro Verde Neón
+                </p>
+              </div>
+              <div className="bg-blue-950/30 border border-blue-500/40 rounded-xl p-3.5">
+                <p className="font-bold text-blue-300 uppercase">M2 · Segmentación de Instancias (YOLO-seg)</p>
+                <p className="text-white text-base font-bold uppercase mt-1">{modalImagen.categoria}</p>
+                <p className="text-slate-300 mt-0.5">
+                  Máscara poligonal de color sobre carrocería{" "}
+                  {modalImagen.area_mascara ? `(Área máscara: ${(modalImagen.area_mascara * 100).toFixed(1)}%)` : ""}
+                </p>
+              </div>
+              <div className="bg-amber-950/30 border border-amber-500/40 rounded-xl p-3.5">
+                <p className="font-bold text-amber-300 uppercase">M3 · Keypoints de Ruedas (YOLO-pose)</p>
+                <p className="text-white text-base font-bold mt-1">
+                  {modalImagen.ejes} Ejes {modalImagen.monto !== undefined ? `→ Tarifa Bs ${Number(modalImagen.monto).toFixed(2)}` : ""}
+                </p>
+                <p className="text-slate-300 mt-0.5">
+                  Puntos clave amarillos/rojos en centros de llanta y línea de ejes
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Barra superior */}
       <header className="bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
         <div className="flex items-center gap-3">
@@ -544,10 +681,10 @@ export default function App() {
               <div>
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <Camera className="w-5 h-5 text-blue-400" />
-                  Capturar / Enviar Frame de Caseta a Inferencia en Google Colab
+                  Capturar / Enviar Frame de Caseta a Inferencia en Google Colab (Con Máscaras en Colores)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Envía una fotografía a <code>POST /api/v1/pasos/frame</code> → Colab M1+M2+M3 → Registra el paso y actualiza este panel en vivo sin recargar.
+                  Envía una imagen a <code>POST /api/v1/pasos/frame</code> → Colab dibuja la máscara del vehículo (M2), la placa (M1), los keypoints de ruedas (M3) y la fecha/hora exacta.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -564,77 +701,183 @@ export default function App() {
                 </select>
                 <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition">
                   <Upload className="w-4 h-4" />
-                  {subiendoFrame ? "Inferencia en Colab..." : "Enviar Frame de Vehículo"}
+                  {subiendoFrame ? "Procesando Máscaras en Colab..." : "Enviar Frame de Vehículo"}
                   <input type="file" accept="image/*" onChange={enviarFrameCaseta} disabled={subiendoFrame} className="hidden" />
                 </label>
               </div>
             </div>
 
+            {/* Visor Destacado del Último Frame con sus Máscaras de Detección en Colores */}
             {ultimoResultadoCaseta && (
-              <div className="bg-blue-950/30 border border-blue-500/40 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs text-blue-300 uppercase font-semibold">Último Frame Procesado por Google Colab</p>
-                  <p className="text-sm text-white mt-1">
-                    Placa: <strong className="font-mono text-base">{ultimoResultadoCaseta.paso.placa_normalizada}</strong> · Categoría:{" "}
-                    <strong className="uppercase">{ultimoResultadoCaseta.paso.categoria_detectada}</strong> · Ejes:{" "}
-                    <strong>{ultimoResultadoCaseta.paso.ejes_detectados}</strong> · Tarifa:{" "}
-                    <strong className="text-emerald-400">Bs {ultimoResultadoCaseta.paso.monto.toFixed(2)}</strong> · Latencia GPU:{" "}
-                    <strong>{ultimoResultadoCaseta.inferencia.latencia_ms} ms</strong>
-                  </p>
+              <div className="bg-blue-950/30 border border-blue-500/50 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Layers className="w-5 h-5 text-blue-400" />
+                    <h3 className="text-sm font-bold uppercase text-blue-300">
+                      Resultado Visual M1 + M2 + M3 con Máscaras de Detección en Colores
+                    </h3>
+                    <BadgeDeteccion detectado={ultimoResultadoCaseta.inferencia?.detectado ?? true} />
+                    <BadgeEstado estado={ultimoResultadoCaseta.paso.estado} />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-300">
+                    <Clock className="w-4 h-4 text-blue-400" />
+                    <span>
+                      Fecha y Hora de detección:{" "}
+                      <strong>
+                        {ultimoResultadoCaseta.inferencia?.fecha_hora_deteccion ||
+                          ultimoResultadoCaseta.paso.fecha_hora_registro}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
-                <BadgeEstado estado={ultimoResultadoCaseta.paso.estado} />
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-center">
+                  <div
+                    onClick={() => abrirModalZoom(ultimoResultadoCaseta.paso, ultimoResultadoCaseta.inferencia)}
+                    className="relative group cursor-pointer bg-slate-950 border border-slate-700 rounded-xl overflow-hidden"
+                  >
+                    <img
+                      src={
+                        ultimoResultadoCaseta.inferencia?.imagen_anotada_b64
+                          ? `data:image/jpeg;base64,${ultimoResultadoCaseta.inferencia.imagen_anotada_b64}`
+                          : urlEvidencia(ultimoResultadoCaseta.paso.imagen_url)
+                      }
+                      alt="Detección M1 M2 M3"
+                      className="w-full max-h-80 object-contain mx-auto"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                      <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-600 text-white text-xs font-bold shadow-lg">
+                        <ZoomIn className="w-4 h-4" /> Ampliar Imagen y Ver Máscaras
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+                        <p className="text-xs text-emerald-400 font-semibold">M1 · Placa + EasyOCR</p>
+                        <p className="text-xl font-mono font-bold text-white mt-0.5">
+                          {ultimoResultadoCaseta.paso.placa_normalizada}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Confianza OCR: {(ultimoResultadoCaseta.paso.confianza_ocr * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+                        <p className="text-xs text-blue-400 font-semibold">M2 · Segmentación Instancia</p>
+                        <p className="text-xl font-bold uppercase text-white mt-0.5">
+                          {ultimoResultadoCaseta.paso.categoria_detectada}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Área máscara: {((ultimoResultadoCaseta.inferencia?.area_mascara || 0.3) * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+                        <p className="text-xs text-amber-400 font-semibold">M3 · Keypoints Ruedas / Ejes</p>
+                        <p className="text-xl font-bold text-white mt-0.5">
+                          {ultimoResultadoCaseta.paso.ejes_detectados} Ejes
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Ruedas detectadas: {ultimoResultadoCaseta.inferencia?.ruedas_detectadas || 2}
+                        </p>
+                      </div>
+                      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3">
+                        <p className="text-xs text-emerald-400 font-semibold">Tarifa Cobrada y Latencia</p>
+                        <p className="text-xl font-bold text-emerald-400 mt-0.5">
+                          Bs {ultimoResultadoCaseta.paso.monto.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          GPU T4: {ultimoResultadoCaseta.inferencia?.latencia_ms} ms
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => abrirModalZoom(ultimoResultadoCaseta.paso, ultimoResultadoCaseta.inferencia)}
+                      className="w-full py-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-xs font-semibold flex items-center justify-center gap-2"
+                    >
+                      <ZoomIn className="w-4 h-4" /> Ver Imagen en Pantalla Completa con sus Máscaras M1 + M2 + M3
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Grilla en Tiempo Real: Últimos Pasos con Imagen de Evidencia + Alertas Recientes */}
+            {/* Grilla en Tiempo Real: Últimos Pasos con Imagen Ampliable + Alertas Recientes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <h3 className="text-base font-semibold text-white mb-4">
-                  Flujo de Vehículos en Tiempo Real (Sin recargar la página)
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-white">
+                    Flujo de Vehículos en Tiempo Real (Haz clic en cualquier imagen para ampliar sus máscaras)
+                  </h3>
+                </div>
                 <div className="space-y-3">
-                  {pasos.slice(0, 10).map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        {p.imagen_url ? (
-                          <img
-                            src={urlEvidencia(p.imagen_url)}
-                            alt={p.placa_normalizada}
-                            className="w-20 h-14 object-cover rounded-lg border border-slate-700 shrink-0"
-                          />
-                        ) : (
-                          <div className="w-20 h-14 rounded-lg bg-slate-800 flex items-center justify-center text-xs text-slate-400">
-                            Sin foto
+                  {pasos.slice(0, 12).map((p) => {
+                    const detOk = p.detectado !== undefined ? p.detectado : p.placa_normalizada !== "ILEGIBLE";
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-blue-500/40 transition"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          {p.imagen_url ? (
+                            <div
+                              onClick={() => abrirModalZoom(p)}
+                              className="relative group cursor-pointer shrink-0"
+                              title="Clic para ampliar imagen y ver máscaras"
+                            >
+                              <img
+                                src={urlEvidencia(p.imagen_url)}
+                                alt={p.placa_normalizada}
+                                className="w-28 h-20 object-cover rounded-lg border border-slate-700 group-hover:border-blue-400 transition"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-lg transition flex items-center justify-center">
+                                <ZoomIn className="w-5 h-5 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-28 h-20 rounded-lg bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                              Sin foto
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-bold text-base text-white bg-slate-800 px-2.5 py-0.5 rounded border border-slate-700">
+                                {p.placa_normalizada}
+                              </span>
+                              <BadgeDeteccion detectado={detOk} />
+                              <BadgeEstado estado={p.estado} />
+                              <span className="text-xs text-slate-400">OCR {(p.confianza_ocr * 100).toFixed(0)}%</span>
+                            </div>
+                            <p className="text-xs text-slate-300 mt-1">
+                              Categoría M2: <span className="uppercase font-semibold text-blue-400">{p.categoria_detectada}</span> ·{" "}
+                              M3: <strong>{p.ejes_detectados} ejes</strong> · Propietario: {p.propietario}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-blue-400" />
+                              <span>
+                                Fecha y Hora: <strong className="text-slate-200">{formatearFechaHora(p.created_at, p.fecha_hora_registro)}</strong>
+                              </span>
+                              <span>· {p.caseta_nombre}</span>
+                            </p>
                           </div>
-                        )}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-base text-white bg-slate-800 px-2.5 py-0.5 rounded border border-slate-700">
-                              {p.placa_normalizada}
-                            </span>
-                            <BadgeEstado estado={p.estado} />
-                            <span className="text-xs text-slate-400">OCR {(p.confianza_ocr * 100).toFixed(0)}%</span>
-                          </div>
-                          <p className="text-xs text-slate-300 mt-1">
-                            <span className="uppercase font-semibold text-blue-400">{p.categoria_detectada}</span> ·{" "}
-                            {p.ejes_detectados} ejes · Propietario: {p.propietario}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {p.caseta_nombre} · {new Date(p.created_at).toLocaleString()}
-                          </p>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-1.5">
+                          <p className="text-lg font-bold text-emerald-400">Bs {Number(p.monto).toFixed(2)}</p>
+                          {p.saldo_restante !== null && (
+                            <p className="text-xs text-slate-400">Saldo: Bs {Number(p.saldo_restante).toFixed(2)}</p>
+                          )}
+                          {p.imagen_url && (
+                            <button
+                              onClick={() => abrirModalZoom(p)}
+                              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30"
+                            >
+                              <ZoomIn className="w-3.5 h-3.5" /> Ver Máscaras
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-emerald-400">Bs {Number(p.monto).toFixed(2)}</p>
-                        {p.saldo_restante !== null && (
-                          <p className="text-xs text-slate-400">Saldo: Bs {Number(p.saldo_restante).toFixed(2)}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -662,8 +905,8 @@ export default function App() {
                       </div>
                       <p className="text-xs text-slate-200 mt-1.5">{a.mensaje}</p>
                       <div className="flex items-center justify-between mt-2.5">
-                        <span className="text-[11px] text-slate-400">
-                          {new Date(a.created_at).toLocaleTimeString()}
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {formatearFechaHora(a.created_at)}
                         </span>
                         {!a.atendida && (
                           <button
@@ -813,7 +1056,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== PÁGINA 3: PASOS (HISTORIAL CON IMAGEN DE EVIDENCIA) ==================== */}
+        {/* ==================== PÁGINA 3: PASOS (HISTORIAL CON IMAGEN Y MÁSCARAS AMPLIABLES) ==================== */}
         {activeTab === "pasos" && (
           <div className="space-y-6">
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap gap-3 items-end">
@@ -864,39 +1107,66 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pasos.map((p) => (
-                <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                  {p.imagen_url ? (
-                    <img
-                      src={urlEvidencia(p.imagen_url)}
-                      alt={p.placa_normalizada}
-                      className="w-full h-44 object-cover border-b border-slate-800"
-                    />
-                  ) : (
-                    <div className="w-full h-44 bg-slate-950 flex items-center justify-center text-slate-500 text-xs">
-                      Sin imagen de evidencia
-                    </div>
-                  )}
-                  <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold text-lg text-white">{p.placa_normalizada}</span>
-                        <BadgeEstado estado={p.estado} />
+              {pasos.map((p) => {
+                const detOk = p.detectado !== undefined ? p.detectado : p.placa_normalizada !== "ILEGIBLE";
+                return (
+                  <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                    {p.imagen_url ? (
+                      <div
+                        onClick={() => abrirModalZoom(p)}
+                        className="relative group cursor-pointer border-b border-slate-800"
+                      >
+                        <img
+                          src={urlEvidencia(p.imagen_url)}
+                          alt={p.placa_normalizada}
+                          className="w-full h-48 object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-600 text-white text-xs font-semibold">
+                            <ZoomIn className="w-4 h-4" /> Ampliar y Ver Máscaras
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-300 mt-1">
-                        Categoría: <strong className="uppercase text-blue-400">{p.categoria_detectada}</strong> · Ejes:{" "}
-                        <strong>{p.ejes_detectados}</strong> · Tarifa:{" "}
-                        <strong className="text-emerald-400">Bs {p.monto.toFixed(2)}</strong>
-                      </p>
-                      <p className="text-xs text-slate-400 mt-1">Propietario: {p.propietario}</p>
-                    </div>
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>{p.caseta_nombre}</span>
-                      <span>{new Date(p.created_at).toLocaleString()}</span>
+                    ) : (
+                      <div className="w-full h-48 bg-slate-950 flex items-center justify-center text-slate-500 text-xs">
+                        Sin imagen de evidencia
+                      </div>
+                    )}
+                    <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono font-bold text-lg text-white">{p.placa_normalizada}</span>
+                          <div className="flex items-center gap-1.5">
+                            <BadgeDeteccion detectado={detOk} />
+                            <BadgeEstado estado={p.estado} />
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-1">
+                          Categoría M2: <strong className="uppercase text-blue-400">{p.categoria_detectada}</strong> · M3:{" "}
+                          <strong>{p.ejes_detectados} ejes</strong> · Tarifa:{" "}
+                          <strong className="text-emerald-400">Bs {p.monto.toFixed(2)}</strong>
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">Propietario: {p.propietario}</p>
+                      </div>
+                      <div className="pt-2 border-t border-slate-800 space-y-1 text-[11px] text-slate-400">
+                        <div className="flex items-center gap-1 text-slate-300">
+                          <Clock className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Fecha y Hora: <strong>{formatearFechaHora(p.created_at, p.fecha_hora_registro)}</strong></span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>{p.caseta_nombre}</span>
+                          <button
+                            onClick={() => abrirModalZoom(p)}
+                            className="text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                          >
+                            <ZoomIn className="w-3 h-3" /> Ampliar
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -920,7 +1190,18 @@ export default function App() {
                       <img
                         src={urlEvidencia(a.imagen_url)}
                         alt={a.placa}
-                        className="w-20 h-14 object-cover rounded-lg border border-slate-700"
+                        onClick={() =>
+                          abrirModalZoom({
+                            imagen_url: a.imagen_url,
+                            placa_normalizada: a.placa,
+                            categoria_detectada: a.categoria,
+                            monto: a.monto,
+                            estado: a.tipo,
+                            created_at: a.created_at,
+                          })
+                        }
+                        className="w-24 h-16 object-cover rounded-lg border border-slate-700 cursor-pointer hover:border-blue-400"
+                        title="Clic para ampliar imagen"
                       />
                     )}
                     <div>
@@ -929,7 +1210,10 @@ export default function App() {
                           {a.tipo}
                         </span>
                         <span className="font-mono font-bold text-white">{a.placa}</span>
-                        <span className="text-xs text-slate-400">{new Date(a.created_at).toLocaleString()}</span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-blue-400" />
+                          {formatearFechaHora(a.created_at)}
+                        </span>
                       </div>
                       <p className="text-sm text-slate-200 mt-1">{a.mensaje}</p>
                     </div>
@@ -954,12 +1238,12 @@ export default function App() {
           </div>
         )}
 
-        {/* ==================== PÁGINA 5: CHAT (AGENTE CONVERSACIONAL) ==================== */}
+        {/* ==================== PÁGINA 5: CHAT (AGENTE CONVERSACIONAL CON IMAGEN ANOTADA) ==================== */}
         {activeTab === "chat" && (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[640px]">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-[660px]">
             <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="font-semibold text-white">Agente Conversacional de Placas (Texto e Imagen)</h3>
+                <h3 className="font-semibold text-white">Agente Conversacional de Placas (Texto e Imagen con Máscaras)</h3>
                 <p className="text-xs text-slate-400">
                   Responde los 4 estados oficiales · Normaliza placas · Sugiere coincidencias OCR (O↔0, I↔1, B↔8, S↔5)
                 </p>
@@ -993,10 +1277,42 @@ export default function App() {
                     }`}
                   >
                     {m.estado && m.rol === "agente" && (
-                      <div className="mb-1.5">
+                      <div className="mb-1.5 flex items-center justify-between gap-3">
                         <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
                           {m.estado}
                         </span>
+                        {m.fecha_hora && (
+                          <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-blue-400" /> {m.fecha_hora}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {m.imagen_url && (
+                      <div
+                        onClick={() =>
+                          abrirModalZoom(
+                            {
+                              imagen_url: m.imagen_url,
+                              placa_normalizada: m.placa,
+                              estado: m.estado,
+                            },
+                            m.inferencia
+                          )
+                        }
+                        className="mb-3 cursor-pointer group relative rounded-xl overflow-hidden border border-slate-700"
+                      >
+                        <img
+                          src={urlEvidencia(m.imagen_url)}
+                          alt="Detección en Chat"
+                          className="max-h-60 w-auto mx-auto object-contain"
+                        />
+                        <div className="bg-slate-900/90 px-3 py-1.5 text-xs text-blue-300 flex items-center justify-between">
+                          <span>Máscaras M1 (Placa) + M2 (Vehículo) + M3 (Ruedas/Ejes)</span>
+                          <span className="flex items-center gap-1 font-semibold">
+                            <ZoomIn className="w-3.5 h-3.5" /> Ampliar
+                          </span>
+                        </div>
                       </div>
                     )}
                     {m.texto}
